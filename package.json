@@ -8,7 +8,8 @@
     "generate:h5": "node scripts/generate-sdk.mjs h5",
     "generate:taro-weapp": "node scripts/generate-sdk.mjs taro-weapp",
     "generate:taro-alipay": "node scripts/generate-sdk.mjs taro-alipay",
-    "generate:all": "node scripts/generate-sdk.mjs all"
+    "generate:all": "node scripts/generate-sdk.mjs all",
+    "publish:all": "node scripts/publish.mjs"
   },
   "devDependencies": {
     "rimraf": "^6.0.1",

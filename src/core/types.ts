@@ -4,6 +4,7 @@ export interface TrackEvent {
   appId: string
   event: string
   userId?: string
+  tenantId?: string
   deviceId: string
   page?: string
   timestamp: number

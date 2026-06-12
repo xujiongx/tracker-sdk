@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, rm, writeFile, readFile, copyFile, constants } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import process from 'node:process'
@@ -6,27 +6,28 @@ import process from 'node:process'
 const root = process.cwd()
 const tempRoot = path.join(root, '.tmp')
 const releaseRoot = path.join(root, 'release')
+const docsRoot = path.join(root, 'docs', 'readme') // 存放 README 模板的目录
 
 const targets = {
   h5: {
     entry: 'src/entries/h5.ts',
     outDir: 'tracker-sdk-h5',
-    packageName: '@local/tracker-sdk-h5',
-    description: 'Local file package for H5 tracker SDK.',
+    packageName: 'tracker-sdk-h5',
+    description: 'H5 tracker SDK for web applications.',
     external: []
   },
   'taro-weapp': {
     entry: 'src/entries/taro-weapp.ts',
     outDir: 'tracker-sdk-taro-weapp',
-    packageName: '@local/tracker-sdk-taro-weapp',
-    description: 'Local file package for Taro WeChat mini program tracker SDK.',
+    packageName: 'tracker-sdk-taro-weapp',
+    description: 'Taro WeChat mini program tracker SDK.',
     external: ['@tarojs/taro']
   },
   'taro-alipay': {
     entry: 'src/entries/taro-alipay.ts',
     outDir: 'tracker-sdk-taro-alipay',
-    packageName: '@local/tracker-sdk-taro-alipay',
-    description: 'Local file package for Taro Alipay mini program tracker SDK.',
+    packageName: 'tracker-sdk-taro-alipay',
+    description: 'Taro Alipay mini program tracker SDK.',
     external: ['@tarojs/taro']
   }
 }
@@ -50,6 +51,7 @@ for (const target of selectedTargets) {
   const packageDir = path.join(releaseRoot, config.outDir)
 
   await rm(tempDir, { recursive: true, force: true })
+  // 重新创建整个 package 目录，确保干净
   await rm(packageDir, { recursive: true, force: true })
   await mkdir(tempDir, { recursive: true })
   await mkdir(packageDir, { recursive: true })
@@ -58,25 +60,82 @@ for (const target of selectedTargets) {
 
   const manifest = {
     name: config.packageName,
-    version: '0.1.0',
-    private: true,
+    version: "0.2.0",
     description: config.description,
     main: `./dist/${target}.js`,
     module: `./dist/${target}.mjs`,
     types: `./dist/${target}.d.ts`,
-    files: ['dist', 'README.md'],
-    peerDependencies: config.external.includes('@tarojs/taro')
+    exports: {
+      ".": {
+        import: `./dist/${target}.mjs`,
+        require: `./dist/${target}.js`,
+        types: `./dist/${target}.d.ts`,
+      },
+    },
+    files: ["dist", "README.md"],
+    keywords: ["tracker", "analytics", "埋点"],
+    license: "MIT",
+    repository: {
+      type: "git",
+      url: "https://github.com/xujiongx/tracker-sdk",
+    },
+    author: "xujiong",
+    peerDependencies: config.external.includes("@tarojs/taro")
       ? {
-          '@tarojs/taro': '>=3.0.0'
+          "@tarojs/taro": ">=3.0.0",
         }
-      : undefined
-  }
+      : undefined,
+  };
 
-  const readme = renderReadme(target)
-
-  await copyDir(tempDir, path.join(packageDir, 'dist'))
+  // 创建 dist 目录
+  const distDir = path.join(packageDir, 'dist')
+  
+  // 复制编译后的文件
+  await copyDir(tempDir, distDir)
+  
+  // 写入 package.json
   await writeFile(path.join(packageDir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
-  await writeFile(path.join(packageDir, 'README.md'), readme, 'utf8')
+  
+  // 复制对应的 README.md 文件
+  const readmeSource = path.join(docsRoot, `${target}.md`)
+  const readmeTarget = path.join(packageDir, 'README.md')
+  
+  try {
+    await copyFile(readmeSource, readmeTarget, constants.COPYFILE_EXCL)
+    console.log(`Copying README for ${target} from ${readmeSource}`)
+  } catch (err) {
+    // 如果找不到模板文件，创建一个简单的 README
+    const platformLabel = {
+      h5: 'H5',
+      'taro-weapp': 'Taro 微信小程序',
+      'taro-alipay': 'Taro 支付宝小程序'
+    }[target]
+    
+    const factoryName = {
+      h5: 'createH5Tracker',
+      'taro-weapp': 'createTaroWeappTracker',
+      'taro-alipay': 'createTaroAlipayTracker'
+    }[target]
+    
+    const fallbackReadme = `# ${platformLabel} Tracker SDK
+
+本目录为本地生成的 SDK 文件包，无需发布到 npm。
+
+## 使用方式
+
+\`\`\`ts
+import { ${factoryName} } from './dist/${target}.mjs'
+
+const tracker = ${factoryName}({
+  appId: 'goal_app',
+  endpoint: 'https://example.com/api/track/batch'
+})
+\`\`\`
+`
+    
+    await writeFile(readmeTarget, fallbackReadme, 'utf8')
+    console.log(`Created fallback README for ${target}`)
+  }
 
   console.log(`Generated ${target} package at ${packageDir}`)
 }
@@ -99,22 +158,6 @@ async function runTsup(config, tempDir) {
   }
 
   await runProcess(process.platform === 'win32' ? 'npx.cmd' : 'npx', args)
-}
-
-function renderReadme(target) {
-  const platformLabel = {
-    h5: 'H5',
-    'taro-weapp': 'Taro 微信小程序',
-    'taro-alipay': 'Taro 支付宝小程序'
-  }[target]
-
-  const factoryName = {
-    h5: 'createH5Tracker',
-    'taro-weapp': 'createTaroWeappTracker',
-    'taro-alipay': 'createTaroAlipayTracker'
-  }[target]
-
-  return `# ${platformLabel} Tracker SDK\n\n本目录为本地生成的 SDK 文件包，无需发布到 npm。\n\n## 使用方式\n\n\`\`\`ts\nimport { ${factoryName} } from './dist/index.js'\n\nconst tracker = ${factoryName}({\n  appId: 'goal_app',\n  endpoint: 'https://example.com/api/track/batch'\n})\n\`\`\`\n`
 }
 
 async function copyDir(source, target) {

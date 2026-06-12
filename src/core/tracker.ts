@@ -17,6 +17,7 @@ const IDENTITY_STORAGE_KEY = '__tracker_identity__'
 interface IdentityState {
   deviceId: string
   userId?: string
+  tenantId?: string
 }
 
 export class Tracker {
@@ -56,6 +57,11 @@ export class Tracker {
 
   identify(userId: string): void {
     this.identity.userId = userId
+    this.persistIdentity()
+  }
+
+  setTenantId(tenantId: string): void {
+    this.identity.tenantId = tenantId
     this.persistIdentity()
   }
 
@@ -186,6 +192,7 @@ export class Tracker {
       appId: this.config.appId,
       event,
       userId: this.identity.userId,
+      tenantId: this.identity.tenantId,
       deviceId: this.identity.deviceId,
       page,
       timestamp: this.adapter.platform === 'h5' ? Date.now() : this.adapterTimestamp(),

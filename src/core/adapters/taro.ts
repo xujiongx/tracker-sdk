@@ -1,6 +1,6 @@
 import Taro from '@tarojs/taro'
 
-import type { PlatformAdapter, StorageAdapter } from '../types'
+import type { PlatformAdapter, StorageAdapter, PostPayload } from '../types'
 
 function createTaroStorage(): StorageAdapter {
   return {
@@ -36,11 +36,39 @@ async function getNetworkType(): Promise<string | undefined> {
   }
 }
 
-export function createTaroAdapter(platform: 'taro-weapp' | 'taro-alipay'): PlatformAdapter {
+export function createTaroAdapter(platform: 'taro-weapp' | 'taro-alipay', mock?: boolean, mockStorageKey?: string): PlatformAdapter {
+  const MOCK_STORAGE_KEY = mockStorageKey || '__tracker_mock_events__'
+  
+  const mockPost = async (url: string, payload: PostPayload, headers?: Record<string, string>) => {
+    const events = payload.events
+    
+    console.log('[Tracker Mock] Post Events:', {
+      url,
+      headers,
+      eventCount: events.length,
+      events
+    })
+
+    try {
+      const existingData = Taro.getStorageSync(MOCK_STORAGE_KEY)
+      const existingEvents = existingData ? JSON.parse(existingData as string) as TrackEvent[] : []
+      const newEvents = [...existingEvents, ...events]
+      Taro.setStorageSync(MOCK_STORAGE_KEY, JSON.stringify(newEvents))
+      
+      console.log('[Tracker Mock] Events saved to storage. Total:', newEvents.length)
+    } catch (error) {
+      console.error('[Tracker Mock] Failed to save events:', error)
+    }
+  }
+  
   return {
     platform,
     storage: createTaroStorage(),
     async post(url, payload, headers) {
+      if (mock) {
+        return mockPost(url, payload, headers)
+      }
+      
       const response = await Taro.request({
         url,
         method: 'POST',

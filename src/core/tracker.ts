@@ -41,6 +41,8 @@ export class Tracker {
       autoTrackPage: adapter.platform === 'h5',
       autoTrackClick: adapter.platform === 'h5',
       debug: false,
+      mock: false,
+      mockStorageKey: '__tracker_mock_events__',
       ...config
     }
 

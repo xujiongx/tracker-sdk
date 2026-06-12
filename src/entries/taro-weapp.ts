@@ -3,7 +3,7 @@ import { createTaroAdapter } from '../core/adapters/taro'
 import type { TrackEvent, TrackerConfig } from '../core'
 
 export function createTaroWeappTracker(config: TrackerConfig) {
-  return createTracker(createTaroAdapter('taro-weapp'), {
+  return createTracker(createTaroAdapter('taro-weapp', config.mock, config.mockStorageKey), {
     autoTrackPage: false,
     autoTrackClick: false,
     ...config

@@ -23,6 +23,8 @@ export interface TrackerConfig {
   debug?: boolean
   headers?: Record<string, string>
   commonContext?: Record<string, unknown>
+  mock?: boolean
+  mockStorageKey?: string
 }
 
 export interface StorageAdapter {

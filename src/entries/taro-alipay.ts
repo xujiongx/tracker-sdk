@@ -3,7 +3,7 @@ import { createTaroAdapter } from '../core/adapters/taro'
 import type { TrackEvent, TrackerConfig } from '../core'
 
 export function createTaroAlipayTracker(config: TrackerConfig) {
-  return createTracker(createTaroAdapter('taro-alipay'), {
+  return createTracker(createTaroAdapter('taro-alipay', config.mock, config.mockStorageKey), {
     autoTrackPage: false,
     autoTrackClick: false,
     ...config

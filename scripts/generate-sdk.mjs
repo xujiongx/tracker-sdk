@@ -7,6 +7,18 @@ const root = process.cwd()
 const tempRoot = path.join(root, '.tmp')
 const releaseRoot = path.join(root, 'release')
 const docsRoot = path.join(root, 'docs', 'readme') // 存放 README 模板的目录
+const versionPath = path.join(root, 'version.json')
+
+
+async function getCurrentVersion() {
+  try {
+    const data = await readFile(versionPath, 'utf8')
+    const { version } = JSON.parse(data)
+    return version
+  } catch {
+    return '0.1.0'
+  }
+}
 
 const targets = {
   h5: {
@@ -42,6 +54,8 @@ for (const target of selectedTargets) {
   }
 }
 
+const currentVersion = await getCurrentVersion()
+
 await mkdir(tempRoot, { recursive: true })
 await mkdir(releaseRoot, { recursive: true })
 
@@ -60,7 +74,7 @@ for (const target of selectedTargets) {
 
   const manifest = {
     name: config.packageName,
-    version: "0.2.0",
+    version: currentVersion,
     description: config.description,
     main: `./dist/${target}.js`,
     module: `./dist/${target}.mjs`,

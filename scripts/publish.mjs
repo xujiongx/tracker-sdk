@@ -2,9 +2,39 @@
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import process from 'node:process'
+import { readFile, writeFile } from 'node:fs/promises'
 
 const root = process.cwd()
 const releaseRoot = path.join(root, 'release')
+const versionPath = path.join(root, 'version.json')
+
+async function getCurrentVersion() {
+  try {
+    const data = await readFile(versionPath, 'utf8')
+    const { version } = JSON.parse(data)
+    return version
+  } catch {
+    return '0.1.0'
+  }
+}
+
+async function saveVersion(version) {
+  await writeFile(versionPath, JSON.stringify({ version }, null, 2), 'utf8')
+}
+
+function incrementVersion(version, type = 'patch') {
+  const [major, minor, patch] = version.split('.').map(Number)
+  
+  switch (type) {
+    case 'major':
+      return `${major + 1}.0.0`
+    case 'minor':
+      return `${major}.${minor + 1}.0`
+    case 'patch':
+    default:
+      return `${major}.${minor}.${patch + 1}`
+  }
+}
 
 const packages = [
   'tracker-sdk-h5',
@@ -85,9 +115,20 @@ async function main() {
     process.exit(1)
   }
   
+  // 自动更新版本号
+  const currentVersion = await getCurrentVersion()
+  const newVersion = incrementVersion(currentVersion, 'patch')
+  await saveVersion(newVersion)
+  console.log(`\n🔢 Version bumped from ${currentVersion} to ${newVersion}`)
+  
+  // 重新生成 SDK
+  console.log('\n📦 Generating SDK packages...')
+  await runCommand('node', ['scripts/generate-sdk.mjs', 'all'], root)
+  console.log('✅ SDK packages generated successfully!')
+  
   // 确认发布
   console.log('\n⚠️  即将发布以下包到 npm 官方源：')
-  packages.forEach(pkg => console.log(`  - ${pkg}`))
+  packages.forEach(pkg => console.log(`  - ${pkg}@${newVersion}`))
   console.log('\n按 Ctrl+C 取消，或等待 5 秒继续...')
   
   await new Promise(resolve => setTimeout(resolve, 5000))

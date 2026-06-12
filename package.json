@@ -1,0 +1,18 @@
+{
+  "name": "tracker-sdk-local-build",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Multi-platform tracker SDK generator for Taro mini-programs and H5.",
+  "scripts": {
+    "clean": "rimraf release .tmp",
+    "generate:h5": "node scripts/generate-sdk.mjs h5",
+    "generate:taro-weapp": "node scripts/generate-sdk.mjs taro-weapp",
+    "generate:taro-alipay": "node scripts/generate-sdk.mjs taro-alipay",
+    "generate:all": "node scripts/generate-sdk.mjs all"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.1",
+    "tsup": "^8.3.5",
+    "typescript": "^5.8.3"
+  }
+}

@@ -3,6 +3,7 @@ import type {
   ExposureOptions,
   PlatformAdapter,
   QueueSnapshot,
+  TenantInfo,
   TrackEvent,
   TrackerConfig
 } from './types'
@@ -18,6 +19,7 @@ interface IdentityState {
   deviceId: string
   userId?: string
   tenantId?: string
+  tenantContext?: Record<string, unknown>
 }
 
 export class Tracker {
@@ -60,8 +62,16 @@ export class Tracker {
     this.persistIdentity()
   }
 
-  setTenantId(tenantId: string): void {
-    this.identity.tenantId = tenantId
+  setTenantId(tenantId: string): void
+  setTenantId(info: TenantInfo): void
+  setTenantId(tenantIdOrInfo: string | TenantInfo): void {
+    if (typeof tenantIdOrInfo === 'string') {
+      this.identity.tenantId = tenantIdOrInfo
+    } else {
+      const { tenantId, ...extra } = tenantIdOrInfo
+      this.identity.tenantId = tenantId
+      this.identity.tenantContext = extra
+    }
     this.persistIdentity()
   }
 
@@ -193,6 +203,7 @@ export class Tracker {
       event,
       userId: this.identity.userId,
       tenantId: this.identity.tenantId,
+      ...this.identity.tenantContext,
       deviceId: this.identity.deviceId,
       page,
       timestamp: this.adapter.platform === 'h5' ? Date.now() : this.adapterTimestamp(),

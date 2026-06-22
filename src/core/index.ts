@@ -7,6 +7,7 @@ export type {
   PostPayload,
   QueueSnapshot,
   StorageAdapter,
+  TenantInfo,
   TrackEvent,
   TrackerConfig,
   TrackerLike

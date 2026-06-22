@@ -1,5 +1,10 @@
 export type PlatformName = 'h5' | 'taro-weapp' | 'taro-alipay'
 
+export interface TenantInfo {
+  tenantId: string
+  [key: string]: unknown
+}
+
 export interface TrackEvent {
   appId: string
   event: string
@@ -10,6 +15,7 @@ export interface TrackEvent {
   timestamp: number
   properties?: Record<string, unknown>
   context?: Record<string, unknown>
+  [key: string]: unknown
 }
 
 export interface TrackerConfig {

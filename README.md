@@ -167,6 +167,7 @@ createTaroAlipayTracker(config)
 - `pageView(page, properties)` - 上报页面访问
 - `pageLeave(page, properties)` - 上报页面离开
 - `identify(userId)` - 关联用户身份
+- `setTenantId(tenantId | TenantInfo)` - 设置租户身份，支持 `sessionId`、`robotId` 等扩展字段
 - `flush()` - 立即上报所有队列中的事件
 - `destroy()` - 销毁实例
 

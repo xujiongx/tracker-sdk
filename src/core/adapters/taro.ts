@@ -1,6 +1,6 @@
 import Taro from '@tarojs/taro'
 
-import type { PlatformAdapter, StorageAdapter, PostPayload } from '../types'
+import type { PlatformAdapter, PostPayload, StorageAdapter, TrackEvent } from '../types'
 
 function createTaroStorage(): StorageAdapter {
   return {

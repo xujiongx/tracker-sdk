@@ -1,4 +1,4 @@
-import type { ExposureOptions, PlatformAdapter, StorageAdapter, TrackerLike } from '../types'
+import type { ExposureOptions, PlatformAdapter, PostPayload, StorageAdapter, TrackerLike } from '../types'
 
 function createMemoryStorage(): StorageAdapter {
   const memory = new Map<string, string>()
@@ -42,11 +42,40 @@ function getCurrentPage(): string | undefined {
   return `${window.location.pathname}${window.location.search}${window.location.hash}`
 }
 
-export function createH5Adapter(): PlatformAdapter {
+export function createH5Adapter(mock?: boolean, mockStorageKey?: string): PlatformAdapter {
+  const storage = resolveStorage()
+  const MOCK_STORAGE_KEY = mockStorageKey || '__tracker_mock_events__'
+
+  const mockPost = async (url: string, payload: PostPayload, headers?: Record<string, string>) => {
+    const events = payload.events
+
+    console.log('[Tracker Mock] Post Events:', {
+      url,
+      headers,
+      eventCount: events.length,
+      events
+    })
+
+    try {
+      const existingData = storage.getItem(MOCK_STORAGE_KEY)
+      const existingEvents = existingData ? JSON.parse(existingData) as unknown[] : []
+      const newEvents = [...existingEvents, ...events]
+      storage.setItem(MOCK_STORAGE_KEY, JSON.stringify(newEvents))
+
+      console.log('[Tracker Mock] Events saved to storage. Total:', newEvents.length)
+    } catch (error) {
+      console.error('[Tracker Mock] Failed to save events:', error)
+    }
+  }
+
   return {
     platform: 'h5',
-    storage: resolveStorage(),
+    storage,
     async post(url, payload, headers) {
+      if (mock) {
+        return mockPost(url, payload, headers)
+      }
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {

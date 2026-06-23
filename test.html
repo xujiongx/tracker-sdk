@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>埋点用户行为路径分析工具</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background: #f5f7fa; padding: 20px; max-width: 1400px; margin: 0 auto; }
+    .container { display: grid; grid-template-columns: 420px 1fr; gap: 20px; }
+    @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
+    .card { background: #fff; border-radius: 10px; padding: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+    h2 { font-size: 18px; margin-bottom: 12px; color: #1f2937; border-left: 4px solid #4080ff; padding-left: 10px; }
+    h3 { font-size: 15px; margin: 16px 0 10px; color: #374151; }
+    textarea {
+      width: 100%; height: 420px; padding: 12px;
+      border: 1px solid #e5e7eb; border-radius: 6px;
+      font-family: monospace; font-size: 13px; resize: none;
+    }
+    .btn-group { margin-top: 10px; display: flex; gap: 10px; }
+    button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+    #parseBtn { background: #4080ff; color: white; }
+    #clearBtn { background: #eee; color: #333; }
+    .section { margin-bottom: 20px; }
+    .path-item {
+      border-left: 3px solid #4080ff; padding: 10px 12px; margin-bottom: 8px;
+      background: #f8fbff; border-radius: 0 6px 6px 0;
+    }
+    .path-item.click-event { border-left-color: #f59e0b; background: #fffbeb; }
+    .path-item.leave-event { border-left-color: #10b981; background: #f0fdf4; }
+    .event-name { font-weight: bold; color: #2563eb; }
+    .click-event .event-name { color: #d97706; }
+    .leave-event .event-name { color: #059669; }
+    .time-text { font-size: 12px; color: #6b7280; margin-top: 4px; }
+    .prop-desc { font-size: 13px; color: #444; margin-top: 6px; word-break: break-all; }
+    .gap-tag {
+      display: inline-block; font-size: 11px; color: #6b7280;
+      background: #f3f4f6; padding: 2px 8px; border-radius: 10px; margin-top: 4px;
+    }
+    .stat-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px; margin: 10px 0;
+    }
+    .stat-card {
+      background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px;
+      padding: 12px; text-align: center;
+    }
+    .stat-card .val { font-size: 22px; font-weight: 700; color: #2563eb; }
+    .stat-card .lbl { font-size: 12px; color: #6b7280; margin-top: 4px; }
+    .flow-bar {
+      display: flex; align-items: center; flex-wrap: wrap; gap: 4px;
+      padding: 12px; background: #f0f9ff; border-radius: 8px; margin: 10px 0;
+    }
+    .flow-node {
+      background: #4080ff; color: #fff; padding: 6px 12px;
+      border-radius: 6px; font-size: 13px; white-space: nowrap;
+    }
+    .flow-node.click { background: #f59e0b; }
+    .flow-arrow { color: #9ca3af; font-size: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0; }
+    th, td { border: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; }
+    th { background: #f9fafb; color: #374151; font-weight: 600; }
+    .bar-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+    .bar-label { width: 160px; font-size: 12px; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar-track { flex: 1; height: 18px; background: #e5e7eb; border-radius: 4px; overflow: hidden; }
+    .bar-fill { height: 100%; background: #4080ff; border-radius: 4px; transition: width .3s; }
+    .bar-count { width: 36px; font-size: 12px; color: #6b7280; text-align: right; }
+    .insight-list { list-style: none; padding: 0; }
+    .insight-list li {
+      padding: 8px 12px; margin-bottom: 6px; border-radius: 6px;
+      font-size: 13px; line-height: 1.5;
+    }
+    .insight-list li.positive { background: #f0fdf4; border-left: 3px solid #10b981; }
+    .insight-list li.warning { background: #fffbeb; border-left: 3px solid #f59e0b; }
+    .insight-list li.info { background: #eff6ff; border-left: 3px solid #4080ff; }
+    .insight-list li.negative { background: #fef2f2; border-left: 3px solid #ef4444; }
+    .meta-row { font-size: 13px; color: #4b5563; margin: 4px 0; }
+    .meta-row strong { color: #1f2937; }
+    .conclusion {
+      margin-top: 12px; padding: 14px; background: #fffbeb;
+      border-radius: 8px; line-height: 1.7; font-size: 13px;
+    }
+    .error { color: #dc2626; padding: 10px; background: #fee2e2; border-radius: 6px; margin-top: 10px; }
+    .tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 4px; margin-left: 6px; }
+    .tag-view { background: #dbeafe; color: #1d4ed8; }
+    .tag-click { background: #fef3c7; color: #b45309; }
+    .tag-leave { background: #d1fae5; color: #047857; }
+    .tag-other { background: #f3f4f6; color: #4b5563; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="card">
+    <h2>埋点 JSON 输入</h2>
+    <textarea id="jsonInput" placeholder="粘贴埋点数据，支持：&#10;1. 事件数组 JSON：[{&quot;event&quot;:&quot;page_view&quot;,...}]&#10;2. SDK 上报格式：{&quot;events&quot;:[...]}&#10;3. 控制台复制的对象（含单引号/无引号 key）"></textarea>
+    <div class="btn-group">
+      <button id="parseBtn">解析并分析</button>
+      <button id="clearBtn">清空</button>
+    </div>
+    <div id="errBox"></div>
+  </div>
+
+  <div class="card">
+    <h2>用户行为分析结果</h2>
+    <div id="resultBox"></div>
+  </div>
+</div>
+
+<script>
+const parseBtn = document.getElementById('parseBtn');
+const clearBtn = document.getElementById('clearBtn');
+const jsonInput = document.getElementById('jsonInput');
+const resultBox = document.getElementById('resultBox');
+const errBox = document.getElementById('errBox');
+
+const PAGE_LABELS = {
+  'pages/index/index': '首页',
+  'pages/product-detail/index': '商品详情',
+  'pages/ble-list/index': '蓝牙设备',
+  'pages/mine/index': '我的',
+  'pages/order/index': '订单',
+};
+
+const EVENT_LABELS = {
+  page_view: '页面浏览',
+  page_leave: '页面离开',
+  init_data_ceremony_click: '初始化仪式点击',
+  index_menu_click: '底部菜单点击',
+};
+
+function tsToTime(ts) {
+  return new Date(ts).toLocaleString('zh-CN', { hour12: false });
+}
+
+function fmtDuration(ms) {
+  if (!ms && ms !== 0) return '未知';
+  if (ms < 1000) return `${ms}ms`;
+  const s = ms / 1000;
+  if (s < 60) return `${s.toFixed(1)}s`;
+  const m = Math.floor(s / 60);
+  const rs = Math.round(s % 60);
+  return `${m}m${rs}s`;
+}
+
+function pageLabel(page) {
+  if (!page) return '未知页面';
+  const key = page.replace(/^\//, '');
+  return PAGE_LABELS[key] || PAGE_LABELS[page] || key;
+}
+
+function eventTag(event) {
+  if (event === 'page_view') return '<span class="tag tag-view">浏览</span>';
+  if (event === 'page_leave') return '<span class="tag tag-leave">离开</span>';
+  if (event.includes('click')) return '<span class="tag tag-click">点击</span>';
+  return '<span class="tag tag-other">其他</span>';
+}
+
+function formatEventDesc(item) {
+  const { event, page, properties = {} } = item;
+  const pg = properties.page || page;
+  switch (event) {
+    case 'page_view': {
+      let s = `进入「${pageLabel(pg)}」`;
+      if (properties.enter_mode) s += `（${properties.enter_mode}）`;
+      if (properties.product_name) s += ` · ${properties.product_name}`;
+      return s;
+    }
+    case 'page_leave':
+      return `离开「${pageLabel(pg)}」，停留 ${fmtDuration(properties.duration)}`;
+    case 'init_data_ceremony_click':
+      return `点击首页初始化仪式${properties.is_first_guide_entry ? '（首次引导）' : ''}`;
+    case 'index_menu_click':
+      return `点击底部菜单「${properties.menu_id || '未知'}」第 ${properties.menu_index ?? '?'} 项`;
+    default:
+      return EVENT_LABELS[event] || `触发事件：${event}`;
+  }
+}
+
+function formatProps(item) {
+  const p = item.properties || {};
+  const parts = [];
+  const skip = new Set(['page', 'duration']);
+  if (p.product_id) parts.push(`商品ID: ${p.product_id}`);
+  if (p.product_name) parts.push(`商品: ${p.product_name}`);
+  if (p.nfc_id) parts.push(`NFC: ${p.nfc_id}`);
+  if (p.enter_mode) parts.push(`进入方式: ${p.enter_mode}`);
+  if (p.tenant_id) parts.push(`租户: ${p.tenant_id}`);
+  if (p.mini_app_config_id) parts.push(`配置ID: ${p.mini_app_config_id}`);
+  if (p.activation_modal) parts.push(`激活弹窗: ${p.activation_modal}`);
+  if (p.auth_required !== undefined) parts.push(`需授权: ${p.auth_required ? '是' : '否'}`);
+  if (p.free_bind_mode !== undefined) parts.push(`免费绑定: ${p.free_bind_mode ? '是' : '否'}`);
+  if (p.menu_id) parts.push(`菜单: ${p.menu_id}`);
+  if (p.is_first_guide_entry !== undefined) parts.push(`首次引导: ${p.is_first_guide_entry ? '是' : '否'}`);
+  Object.entries(p).forEach(([k, v]) => {
+    if (!skip.has(k) && !parts.some(s => s.startsWith(k))) {
+      parts.push(`${k}: ${JSON.stringify(v)}`);
+    }
+  });
+  return parts.join(' · ');
+}
+
+function parseInput(raw) {
+  const input = raw.trim();
+  if (!input) throw new Error('请输入埋点数据');
+
+  const attempts = [
+    () => JSON.parse(input),
+    () => {
+      if (!input.includes('\\"')) throw new Error('skip');
+      return JSON.parse(input.replace(/\\"/g, '"'));
+    },
+    () => {
+      const once = JSON.parse(input);
+      if (typeof once !== 'string') throw new Error('skip');
+      return JSON.parse(once);
+    },
+    () => new Function('return ' + input)()
+  ];
+
+  let data, lastErr;
+  for (const attempt of attempts) {
+    try { data = attempt(); break; } catch (e) { lastErr = e; }
+  }
+  if (data === undefined) {
+    throw new Error(`JSON 格式错误：${lastErr?.message || '无法解析'}`);
+  }
+  if (data && typeof data === 'object' && !Array.isArray(data) && Array.isArray(data.events)) {
+    data = data.events;
+  }
+  if (!Array.isArray(data)) throw new Error('数据必须是事件数组，或包含 events 数组的对象');
+  if (data.length === 0) throw new Error('数组不能为空');
+  return data;
+}
+
+function analyze(data) {
+  const sorted = [...data].sort((a, b) => a.timestamp - b.timestamp);
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  const sessionDuration = last.timestamp - first.timestamp;
+
+  const eventCounts = {};
+  const pageVisits = {};
+  const dwellTimes = {};
+  const clickEvents = [];
+  const pageFlow = [];
+
+  sorted.forEach((item, i) => {
+    eventCounts[item.event] = (eventCounts[item.event] || 0) + 1;
+
+    if (item.event === 'page_view') {
+      const pg = item.properties?.page || item.page;
+      pageVisits[pg] = (pageVisits[pg] || 0) + 1;
+      pageFlow.push({ type: 'view', page: pg, event: item.event });
+    }
+    if (item.event === 'page_leave' && item.properties?.duration) {
+      const pg = item.properties?.page || item.page;
+      if (!dwellTimes[pg] || item.properties.duration > dwellTimes[pg]) {
+        dwellTimes[pg] = item.properties.duration;
+      }
+      pageFlow.push({ type: 'leave', page: pg, duration: item.properties.duration });
+    }
+    if (item.event.includes('click')) {
+      clickEvents.push(item);
+      pageFlow.push({ type: 'click', event: item.event, page: item.page });
+    }
+  });
+
+  const intervals = [];
+  for (let i = 1; i < sorted.length; i++) {
+    intervals.push({
+      from: sorted[i - 1].event,
+      to: sorted[i].event,
+      ms: sorted[i].timestamp - sorted[i - 1].timestamp,
+    });
+  }
+
+  const ctx = first.context || {};
+  const entryView = sorted.find(e => e.event === 'page_view');
+  const entryProps = entryView?.properties || {};
+
+  return {
+    sorted, first, last, sessionDuration, eventCounts, pageVisits,
+    dwellTimes, clickEvents, pageFlow, intervals, ctx, entryProps, entryView,
+  };
+}
+
+function buildFlowHtml(pageFlow) {
+  if (!pageFlow.length) return '<p style="color:#6b7280;font-size:13px">无页面流转数据</p>';
+  const nodes = [];
+  let lastPage = null;
+  pageFlow.forEach(step => {
+    if (step.type === 'view') {
+      if (step.page !== lastPage) {
+        nodes.push(`<span class="flow-node">${pageLabel(step.page)}</span>`);
+        lastPage = step.page;
+      }
+    } else if (step.type === 'click') {
+      const label = EVENT_LABELS[step.event] || step.event.replace(/_click$/, '');
+      nodes.push(`<span class="flow-node click">${label}</span>`);
+    } else if (step.type === 'leave') {
+      nodes.push(`<span class="flow-node" style="background:#10b981;font-size:11px">停留${fmtDuration(step.duration)}</span>`);
+    }
+  });
+  return `<div class="flow-bar">${nodes.join('<span class="flow-arrow">→</span>')}</div>`;
+}
+
+function buildBarChart(counts, maxVal) {
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => {
+      const pct = maxVal ? (v / maxVal * 100) : 0;
+      const label = EVENT_LABELS[k] || k;
+      return `<div class="bar-row">
+        <span class="bar-label" title="${k}">${label}</span>
+        <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+        <span class="bar-count">${v}</span>
+      </div>`;
+    }).join('');
+}
+
+function genInsights(a) {
+  const insights = [];
+  const { sorted, sessionDuration, clickEvents, dwellTimes, entryProps, entryView, intervals } = a;
+  const clickCnt = clickEvents.length;
+  const viewCnt = sorted.filter(e => e.event === 'page_view').length;
+  const leaveCnt = sorted.filter(e => e.event === 'page_leave').length;
+
+  // 会话概览
+  insights.push({
+    type: 'info',
+    text: `本次会话共 ${sorted.length} 条事件，历时 ${fmtDuration(sessionDuration)}，浏览 ${viewCnt} 个页面，产生 ${clickCnt} 次交互。`,
+  });
+
+  // 进入方式
+  if (entryProps.enter_mode) {
+    insights.push({
+      type: 'info',
+      text: `用户通过「${entryProps.enter_mode}」方式进入${entryProps.product_name ? `，关联商品「${entryProps.product_name}」` : ''}。`,
+    });
+  }
+
+  // NFC / 租赁场景
+  if (entryProps.nfc_id) {
+    insights.push({
+      type: 'positive',
+      text: `携带 NFC 设备标识（${entryProps.nfc_id}），属于硬件关联场景，转化潜力较高。`,
+    });
+  }
+  if (entryProps.activation_modal === 'rental') {
+    insights.push({
+      type: 'info',
+      text: '激活弹窗类型为租赁模式，用户可能处于设备租赁/绑定流程。',
+    });
+  }
+
+  // 点击行为
+  if (clickCnt === 0) {
+    insights.push({
+      type: 'warning',
+      text: '全程无主动点击，用户可能仅为浏览或未找到目标入口，需关注页面引导与 CTA 可见性。',
+    });
+  } else {
+    clickEvents.forEach(c => {
+      const desc = formatEventDesc(c);
+      const gap = sorted.indexOf(c) > 0
+        ? fmtDuration(c.timestamp - sorted[sorted.indexOf(c) - 1].timestamp)
+        : '';
+      insights.push({
+        type: 'positive',
+        text: `${desc}${gap ? `（距上一步 ${gap}）` : ''}，表明用户有明确操作意图。`,
+      });
+    });
+  }
+
+  // 页面停留
+  const dwellEntries = Object.entries(dwellTimes);
+  if (dwellEntries.length) {
+    const longest = dwellEntries.sort((a, b) => b[1] - a[1])[0];
+    insights.push({
+      type: longest[1] > 10000 ? 'positive' : 'warning',
+      text: `停留最久的页面是「${pageLabel(longest[0])}」（${fmtDuration(longest[1])}）${longest[1] > 10000 ? '，用户对该页内容有较深关注' : '，停留偏短，内容吸引力或引导可能不足'}。`,
+    });
+  }
+
+  // 页面跳转趋势
+  const views = sorted.filter(e => e.event === 'page_view');
+  if (views.length >= 2) {
+    const from = pageLabel(views[0].properties?.page || views[0].page);
+    const to = pageLabel(views[views.length - 1].properties?.page || views[views.length - 1].page);
+    const navGap = views[views.length - 1].timestamp - views[0].timestamp;
+    insights.push({
+      type: 'positive',
+      text: `页面流转：${from} → ${to}（${fmtDuration(navGap)} 内完成跳转），用户正在向深层页面探索。`,
+    });
+  } else if (views.length === 1 && leaveCnt === 0) {
+    insights.push({
+      type: 'warning',
+      text: '仅浏览一个页面且未触发 page_leave，会话可能未正常结束或数据不完整。',
+    });
+  }
+
+  // 操作节奏
+  const fastClicks = intervals.filter(iv => iv.ms < 3000 && iv.to.includes('click'));
+  if (fastClicks.length) {
+    insights.push({
+      type: 'info',
+      text: `有 ${fastClicks.length} 次快速交互（间隔 < 3s），用户操作节奏较快。`,
+    });
+  }
+  const slowGaps = intervals.filter(iv => iv.ms > 8000);
+  if (slowGaps.length) {
+    insights.push({
+      type: 'warning',
+      text: `有 ${slowGaps.length} 处操作间隔超过 8s，用户可能在阅读内容或犹豫不决。`,
+    });
+  }
+
+  // 转化判断
+  const hasProductDetail = sorted.some(e =>
+    (e.properties?.page || e.page || '').includes('product-detail')
+  );
+  const hasCeremonyClick = sorted.some(e => e.event === 'init_data_ceremony_click');
+
+  if (hasCeremonyClick && hasProductDetail) {
+    insights.push({
+      type: 'positive',
+      text: '用户完成了「仪式点击 → 商品详情」转化路径，属于高意向用户，建议跟进绑定/下单转化。',
+    });
+  } else if (hasCeremonyClick) {
+    insights.push({
+      type: 'warning',
+      text: '用户点击了初始化仪式但未进入商品详情，可能在仪式流程中流失，建议优化仪式完成后的引导。',
+    });
+  } else if (hasProductDetail) {
+    insights.push({
+      type: 'positive',
+      text: '用户已进入商品详情页，具备商品转化意向。',
+    });
+  }
+
+  return insights;
+}
+
+function render(data) {
+  const a = analyze(data);
+  const { sorted, first, sessionDuration, eventCounts, pageVisits, dwellTimes, ctx } = a;
+  const maxEventCnt = Math.max(...Object.values(eventCounts), 1);
+
+  let html = '';
+
+  // 一、会话概览
+  html += `<div class="section"><h3>一、会话概览</h3>`;
+  html += `<div class="meta-row"><strong>用户 ID：</strong>${first.userId || '—'}</div>`;
+  html += `<div class="meta-row"><strong>设备 ID：</strong>${first.deviceId || '—'}</div>`;
+  html += `<div class="meta-row"><strong>租户 ID：</strong>${first.tenantId || '—'}</div>`;
+  html += `<div class="meta-row"><strong>平台：</strong>${ctx.platform || '—'} · ${ctx.model || ''} · ${ctx.system || ''} · ${ctx.networkType || ''}</div>`;
+  html += `<div class="meta-row"><strong>SDK 版本：</strong>${ctx.sdkVersion || '—'} · App ${ctx.appVersion || '—'}</div>`;
+  html += `<div class="meta-row"><strong>会话时段：</strong>${tsToTime(first.timestamp)} ~ ${tsToTime(a.last.timestamp)}</div>`;
+  html += `<div class="stat-grid">
+    <div class="stat-card"><div class="val">${sorted.length}</div><div class="lbl">总事件数</div></div>
+    <div class="stat-card"><div class="val">${fmtDuration(sessionDuration)}</div><div class="lbl">会话时长</div></div>
+    <div class="stat-card"><div class="val">${Object.keys(pageVisits).length}</div><div class="lbl">访问页面数</div></div>
+    <div class="stat-card"><div class="val">${a.clickEvents.length}</div><div class="lbl">交互次数</div></div>
+  </div></div>`;
+
+  // 二、页面流转路径
+  html += `<div class="section"><h3>二、页面流转路径</h3>`;
+  html += buildFlowHtml(a.pageFlow);
+  html += `</div>`;
+
+  // 三、操作时序
+  html += `<div class="section"><h3>三、操作时序明细</h3>`;
+  sorted.forEach((item, i) => {
+    const cls = item.event === 'page_leave' ? 'leave-event'
+      : item.event.includes('click') ? 'click-event' : '';
+    const gap = i > 0 ? sorted[i].timestamp - sorted[i - 1].timestamp : 0;
+    const props = formatProps(item);
+    html += `<div class="path-item ${cls}">
+      <div class="event-name">${i + 1}. ${formatEventDesc(item)} ${eventTag(item.event)}</div>
+      <div class="time-text">${tsToTime(item.timestamp)}${gap ? ` · 距上一步 ${fmtDuration(gap)}` : ''}</div>
+      ${props ? `<div class="prop-desc">${props}</div>` : ''}
+    </div>`;
+  });
+  html += `</div>`;
+
+  // 四、统计图表
+  html += `<div class="section"><h3>四、事件分布</h3>`;
+  html += buildBarChart(eventCounts, maxEventCnt);
+  html += `</div>`;
+
+  if (Object.keys(dwellTimes).length) {
+    html += `<div class="section"><h3>五、页面停留时长</h3><table>
+      <tr><th>页面</th><th>停留时长</th><th>评估</th></tr>`;
+    Object.entries(dwellTimes).sort((a, b) => b[1] - a[1]).forEach(([pg, ms]) => {
+      const eval_ = ms > 15000 ? '深度浏览' : ms > 5000 ? '正常浏览' : '快速离开';
+      html += `<tr><td>${pageLabel(pg)}</td><td>${fmtDuration(ms)}</td><td>${eval_}</td></tr>`;
+    });
+    html += `</table></div>`;
+  }
+
+  // 六、智能洞察
+  const insights = genInsights(a);
+  html += `<div class="section"><h3>${Object.keys(dwellTimes).length ? '六' : '五'}、行为洞察与趋势</h3>`;
+  html += `<ul class="insight-list">${insights.map(ins =>
+    `<li class="${ins.type}">${ins.text}</li>`
+  ).join('')}</ul></div>`;
+
+  // 七、综合结论
+  html += `<div class="conclusion"><h3>综合结论</h3>`;
+  html += buildSummary(a, insights);
+  html += `</div>`;
+
+  resultBox.innerHTML = html;
+}
+
+function buildSummary(a, insights) {
+  const { sorted, clickEvents, entryProps } = a;
+  const views = sorted.filter(e => e.event === 'page_view');
+  const hasDetail = sorted.some(e => (e.properties?.page || e.page || '').includes('product-detail'));
+  const hasClick = clickEvents.length > 0;
+  const enterMode = entryProps.enter_mode || '未知';
+
+  const tags = [];
+  if (entryProps.nfc_id) tags.push('硬件关联');
+  if (enterMode.includes('绑定')) tags.push('绑定场景');
+  if (hasClick) tags.push('有主动交互');
+  if (hasDetail) tags.push('商品意向');
+  if (!hasClick) tags.push('纯浏览');
+
+  let userType = '探索型用户';
+  if (hasClick && hasDetail) userType = '高意向转化用户';
+  else if (hasClick) userType = '交互型用户';
+  else if (views.length === 1) userType = '浅浏览用户';
+
+  let html = `<p><strong>用户画像：</strong>${userType}`;
+  if (tags.length) html += `（${tags.join('、')}）`;
+  html += `</p><p><strong>关键路径：</strong>`;
+  html += views.map(v => pageLabel(v.properties?.page || v.page)).join(' → ') || '—';
+  html += `</p><p><strong>运营建议：</strong></p><ol style="padding-left:20px;font-size:13px;line-height:1.8">`;
+
+  const suggestions = [];
+  if (entryProps.enter_mode?.includes('绑定') && hasClick && hasDetail) {
+    suggestions.push('用户已进入绑定+商品详情路径，可在详情页强化「立即绑定/租赁」CTA，缩短转化链路。');
+  }
+  if (a.clickEvents.some(c => c.event === 'init_data_ceremony_click') && !hasDetail) {
+    suggestions.push('仪式点击后未进入详情，检查仪式流程结束后的跳转逻辑与引导文案。');
+  }
+  if (Object.values(a.dwellTimes).some(d => d < 5000)) {
+    suggestions.push('部分页面停留不足 5s，建议优化首屏内容与价值传达。');
+  }
+  if (!hasClick) {
+    suggestions.push('无主动交互，考虑在首页增加引导弹窗或突出核心功能入口。');
+  }
+  if (entryProps.free_bind_mode) {
+    suggestions.push('当前为免费绑定模式，可突出「0 元绑定」利益点提升转化。');
+  }
+  if (!suggestions.length) {
+    suggestions.push('用户行为正常，持续观察后续是否产生绑定/下单事件。');
+  }
+  suggestions.forEach(s => { html += `<li>${s}</li>`; });
+  html += `</ol>`;
+  return html;
+}
+
+parseBtn.onclick = () => {
+  errBox.innerHTML = '';
+  resultBox.innerHTML = '';
+  try {
+    const data = parseInput(jsonInput.value);
+    render(data);
+  } catch (e) {
+    errBox.innerHTML = `<div class="error">解析失败：${e.message}</div>`;
+  }
+};
+
+clearBtn.onclick = () => {
+  jsonInput.value = '';
+  resultBox.innerHTML = '';
+  errBox.innerHTML = '';
+};
+</script>
+</body>
+</html>

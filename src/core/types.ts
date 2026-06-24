@@ -32,6 +32,7 @@ export interface TrackerConfig {
   commonContext?: Record<string, unknown>
   mock?: boolean
   mockStorageKey?: string
+  deviceId?: string
 }
 
 export interface StorageAdapter {

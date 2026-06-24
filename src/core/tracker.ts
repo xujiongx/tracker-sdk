@@ -23,7 +23,7 @@ interface IdentityState {
 }
 
 export class Tracker {
-  private readonly config: Required<Omit<TrackerConfig, 'headers' | 'commonContext'>> & Pick<TrackerConfig, 'headers' | 'commonContext'>
+  private readonly config: Required<Omit<TrackerConfig, 'headers' | 'commonContext' | 'deviceId'>> & Pick<TrackerConfig, 'headers' | 'commonContext' | 'deviceId'>
   private readonly queue: EventQueue
   private readonly identityKey: string
   private identity: IdentityState
@@ -60,6 +60,19 @@ export class Tracker {
   identify(userId: string): void {
     this.identity.userId = userId
     this.persistIdentity()
+  }
+
+  setDeviceId(deviceId: string): void {
+    const trimmed = deviceId.trim()
+    if (!trimmed) {
+      throw new Error('deviceId must be a non-empty string')
+    }
+    this.identity.deviceId = trimmed
+    this.persistIdentity()
+  }
+
+  getDeviceId(): string {
+    return this.identity.deviceId
   }
 
   setTenantId(tenantId: string): void
@@ -260,8 +273,8 @@ export class Tracker {
       return cache
     }
 
-    const identity = {
-      deviceId: createDeviceId(this.adapter.platform)
+    const identity: IdentityState = {
+      deviceId: this.config.deviceId?.trim() || createDeviceId(this.adapter.platform)
     }
     this.adapter.storage.setItem(this.identityKey, JSON.stringify(identity))
     return identity

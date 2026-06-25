@@ -26,6 +26,8 @@ export interface TrackerConfig {
   maxQueueSize?: number
   /** 上报失败时的重试次数，不含首次请求。默认 3 */
   retryCount?: number
+  /** 重试间隔（毫秒），默认 4000 */
+  retryInterval?: number
   storageKey?: string
   autoTrackPage?: boolean
   autoTrackClick?: boolean

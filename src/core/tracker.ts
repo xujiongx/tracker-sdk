@@ -14,6 +14,7 @@ const DEFAULT_BATCH_SIZE = 20
 const DEFAULT_FLUSH_INTERVAL = 5000
 const DEFAULT_MAX_QUEUE_SIZE = 500
 const DEFAULT_RETRY_COUNT = 3
+const DEFAULT_RETRY_INTERVAL = 4000
 const IDENTITY_STORAGE_KEY = '__tracker_identity__'
 
 interface IdentityState {
@@ -32,7 +33,10 @@ export class Tracker {
   private onlineDisposer?: (() => void) | void
   private autoPageDisposer?: (() => void) | void
   private autoClickDisposer?: (() => void) | void
-  private flushing = false
+  private uploading = false
+  private retryAttempts = 0
+  private retryExhausted = false
+  private retryTimer?: ReturnType<typeof setTimeout>
   private pageStartedAt?: number
   private activePage?: string
 
@@ -42,6 +46,7 @@ export class Tracker {
       flushInterval: DEFAULT_FLUSH_INTERVAL,
       maxQueueSize: DEFAULT_MAX_QUEUE_SIZE,
       retryCount: DEFAULT_RETRY_COUNT,
+      retryInterval: DEFAULT_RETRY_INTERVAL,
       storageKey: '__tracker_events__',
       autoTrackPage: adapter.platform === 'h5',
       autoTrackClick: adapter.platform === 'h5',
@@ -102,8 +107,8 @@ export class Tracker {
     this.queue.enqueue(trackEvent)
     this.log('track', trackEvent)
 
-    if (this.queue.size() >= this.config.batchSize) {
-      void this.flush()
+    if (this.queue.size() >= this.config.batchSize && !this.retryExhausted) {
+      void this.attemptFlush()
     }
 
     return trackEvent
@@ -135,41 +140,8 @@ export class Tracker {
   }
 
   async flush(): Promise<void> {
-    if (this.flushing) {
-      return
-    }
-
-    const batch = this.queue.peek(this.config.batchSize)
-
-    if (batch.length === 0) {
-      return
-    }
-
-    this.flushing = true
-
-    try {
-      const maxAttempts = Math.max(1, this.config.retryCount + 1)
-      let lastError: unknown
-
-      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        try {
-          await this.adapter.post(this.config.endpoint, { events: batch }, this.config.headers)
-          this.queue.remove(batch.length)
-          this.log('flush success', { size: batch.length, attempt })
-          return
-        } catch (error) {
-          lastError = error
-
-          if (attempt < maxAttempts) {
-            this.log('flush retry', { attempt, maxAttempts, error })
-          }
-        }
-      }
-
-      this.log('flush failed', lastError)
-    } finally {
-      this.flushing = false
-    }
+    this.clearRetryState()
+    await this.attemptFlush()
   }
 
   async observeExposure(options: ExposureOptions): Promise<() => void> {
@@ -204,7 +176,7 @@ export class Tracker {
   getSnapshot(): QueueSnapshot {
     return {
       pending: this.queue.size(),
-      flushing: this.flushing
+      flushing: this.uploading || Boolean(this.retryTimer)
     }
   }
 
@@ -218,6 +190,7 @@ export class Tracker {
       this.flushTimer = undefined
     }
 
+    this.clearRetryState()
     this.onlineDisposer?.()
     this.autoPageDisposer?.()
     this.autoClickDisposer?.()
@@ -254,7 +227,8 @@ export class Tracker {
 
   private setupOnlineFlush(): void {
     this.onlineDisposer = this.adapter.subscribeOnline?.(() => {
-      void this.flush()
+      this.clearRetryState()
+      void this.attemptFlush()
     })
   }
 
@@ -270,8 +244,63 @@ export class Tracker {
 
   private startFlushTimer(): void {
     this.flushTimer = setInterval(() => {
-      void this.flush()
+      if (this.retryExhausted) {
+        return
+      }
+
+      void this.attemptFlush()
     }, this.config.flushInterval)
+  }
+
+  private async attemptFlush(): Promise<void> {
+    if (this.uploading || this.retryTimer || this.retryExhausted) {
+      return
+    }
+
+    const batch = this.queue.peek(this.config.batchSize)
+
+    if (batch.length === 0) {
+      this.clearRetryState()
+      return
+    }
+
+    this.uploading = true
+
+    try {
+      await this.adapter.post(this.config.endpoint, { events: batch }, this.config.headers)
+      this.queue.remove(batch.length)
+      this.clearRetryState()
+      this.log('flush success', { size: batch.length })
+    } catch (error) {
+      if (this.retryAttempts < this.config.retryCount) {
+        this.retryAttempts += 1
+        this.log('flush retry scheduled', {
+          retryAttempt: this.retryAttempts,
+          retryCount: this.config.retryCount,
+          retryInterval: this.config.retryInterval,
+          error
+        })
+        this.retryTimer = setTimeout(() => {
+          this.retryTimer = undefined
+          void this.attemptFlush()
+        }, this.config.retryInterval)
+      } else {
+        this.retryExhausted = true
+        this.log('flush failed, retries exhausted', error)
+      }
+    } finally {
+      this.uploading = false
+    }
+  }
+
+  private clearRetryState(): void {
+    this.retryAttempts = 0
+    this.retryExhausted = false
+
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer)
+      this.retryTimer = undefined
+    }
   }
 
   private getCurrentPage(): string | undefined {

@@ -13,6 +13,7 @@ const SDK_VERSION = '0.1.0'
 const DEFAULT_BATCH_SIZE = 20
 const DEFAULT_FLUSH_INTERVAL = 5000
 const DEFAULT_MAX_QUEUE_SIZE = 500
+const DEFAULT_RETRY_COUNT = 3
 const IDENTITY_STORAGE_KEY = '__tracker_identity__'
 
 interface IdentityState {
@@ -40,6 +41,7 @@ export class Tracker {
       batchSize: DEFAULT_BATCH_SIZE,
       flushInterval: DEFAULT_FLUSH_INTERVAL,
       maxQueueSize: DEFAULT_MAX_QUEUE_SIZE,
+      retryCount: DEFAULT_RETRY_COUNT,
       storageKey: '__tracker_events__',
       autoTrackPage: adapter.platform === 'h5',
       autoTrackClick: adapter.platform === 'h5',
@@ -146,11 +148,25 @@ export class Tracker {
     this.flushing = true
 
     try {
-      await this.adapter.post(this.config.endpoint, { events: batch }, this.config.headers)
-      this.queue.remove(batch.length)
-      this.log('flush success', { size: batch.length })
-    } catch (error) {
-      this.log('flush failed', error)
+      const maxAttempts = Math.max(1, this.config.retryCount + 1)
+      let lastError: unknown
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          await this.adapter.post(this.config.endpoint, { events: batch }, this.config.headers)
+          this.queue.remove(batch.length)
+          this.log('flush success', { size: batch.length, attempt })
+          return
+        } catch (error) {
+          lastError = error
+
+          if (attempt < maxAttempts) {
+            this.log('flush retry', { attempt, maxAttempts, error })
+          }
+        }
+      }
+
+      this.log('flush failed', lastError)
     } finally {
       this.flushing = false
     }

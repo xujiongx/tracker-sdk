@@ -24,6 +24,8 @@ export interface TrackerConfig {
   batchSize?: number
   flushInterval?: number
   maxQueueSize?: number
+  /** 上报失败时的重试次数，不含首次请求。默认 3 */
+  retryCount?: number
   storageKey?: string
   autoTrackPage?: boolean
   autoTrackClick?: boolean

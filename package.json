@@ -9,7 +9,8 @@
     "generate:taro-weapp": "node scripts/generate-sdk.mjs taro-weapp",
     "generate:taro-alipay": "node scripts/generate-sdk.mjs taro-alipay",
     "generate:all": "node scripts/generate-sdk.mjs all",
-    "publish:all": "node scripts/publish.mjs"
+    "publish:all": "node scripts/publish.mjs",
+    "login": "npm login --registry=https://registry.npmjs.org/"
   },
   "devDependencies": {
     "rimraf": "^6.0.1",

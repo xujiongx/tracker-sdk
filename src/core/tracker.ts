@@ -123,8 +123,10 @@ export class Tracker {
     })
   }
 
-  async pageLeave(page = this.activePage, properties: Record<string, unknown> = {}): Promise<TrackEvent | null> {
-    if (!page || !this.pageStartedAt) {
+  async pageLeave(page?: string, properties: Record<string, unknown> = {}): Promise<TrackEvent | null> {
+    const leavingPage = this.activePage ?? page
+
+    if (!leavingPage || !this.pageStartedAt) {
       return null
     }
 
@@ -134,7 +136,7 @@ export class Tracker {
 
     return this.track('page_leave', {
       ...properties,
-      page,
+      page: leavingPage,
       duration
     })
   }
@@ -204,7 +206,7 @@ export class Tracker {
 
   private async buildEvent(event: string, properties: Record<string, unknown>): Promise<TrackEvent> {
     const context = await this.resolveContext()
-    const page = this.getCurrentPage()
+    const page = typeof properties.page === 'string' ? properties.page : this.getCurrentPage()
 
     return {
       appId: this.config.appId,

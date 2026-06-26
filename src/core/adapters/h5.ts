@@ -141,7 +141,7 @@ export function createH5Adapter(mock?: boolean, mockStorageKey?: string): Platfo
       window.addEventListener('popstate', onRouteChange)
       window.addEventListener('hashchange', onRouteChange)
       window.addEventListener('beforeunload', () => {
-        void tracker.pageLeave(getCurrentPage())
+        void tracker.pageLeave()
       })
 
       void tracker.pageView(getCurrentPage())

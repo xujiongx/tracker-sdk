@@ -21,10 +21,10 @@ export function createTaroPageLifecycle(
       void tracker.pageView(getPage())
     },
     onHide() {
-      void tracker.pageLeave(getPage())
+      void tracker.pageLeave()
     },
     onUnload() {
-      void tracker.pageLeave(getPage())
+      void tracker.pageLeave()
     }
   }
 }

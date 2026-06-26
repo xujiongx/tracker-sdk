@@ -8,13 +8,13 @@ import type {
   TrackerConfig
 } from './types'
 import { createDeviceId, isRecord, safeParse } from './utils'
+import { SDK_VERSION } from './version'
 
-const SDK_VERSION = '0.1.0'
 const DEFAULT_BATCH_SIZE = 20
 const DEFAULT_FLUSH_INTERVAL = 5000
 const DEFAULT_MAX_QUEUE_SIZE = 500
 const DEFAULT_RETRY_COUNT = 3
-const DEFAULT_RETRY_INTERVAL = 4000
+const DEFAULT_RETRY_INTERVAL = 5000
 const IDENTITY_STORAGE_KEY = '__tracker_identity__'
 
 interface IdentityState {
@@ -140,6 +140,11 @@ export class Tracker {
   }
 
   async flush(): Promise<void> {
+    await this.resume()
+  }
+
+  /** 重试耗尽或网络恢复后，重启自动上报并立即尝试发送队列中的事件 */
+  async resume(): Promise<void> {
     this.clearRetryState()
     await this.attemptFlush()
   }
@@ -176,7 +181,8 @@ export class Tracker {
   getSnapshot(): QueueSnapshot {
     return {
       pending: this.queue.size(),
-      flushing: this.uploading || Boolean(this.retryTimer)
+      flushing: this.uploading || Boolean(this.retryTimer),
+      paused: this.retryExhausted
     }
   }
 
@@ -227,8 +233,7 @@ export class Tracker {
 
   private setupOnlineFlush(): void {
     this.onlineDisposer = this.adapter.subscribeOnline?.(() => {
-      this.clearRetryState()
-      void this.attemptFlush()
+      void this.resume()
     })
   }
 

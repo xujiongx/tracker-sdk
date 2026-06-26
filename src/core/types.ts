@@ -78,4 +78,6 @@ export interface TrackerLike {
 export interface QueueSnapshot {
   pending: number
   flushing: boolean
+  /** 重试耗尽后自动上报已暂停，需调用 resume() 恢复 */
+  paused: boolean
 }
